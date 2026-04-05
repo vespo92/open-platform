@@ -1,0 +1,77 @@
+# Multi-node production — NixOS with k3s HA (embedded etcd)
+# Copy to project root: cp nix/examples/open-platform-multinode.yaml open-platform.yaml
+#
+# This example shows the NixOS module configuration for a 3-node HA cluster.
+# Only the first node (server-init) runs `make deploy`. Other nodes join automatically.
+#
+# NixOS module configuration for each node:
+#
+# ── Node 1: Control plane init (first server) ──────────────────────────────
+#
+#   inputs.open-platform.url = "github:trevato/open-platform";
+#
+#   services.open-platform = {
+#     enable = true;
+#     domain = "espocorp.com";
+#     role = "server-init";          # bootstraps embedded etcd
+#
+#     k3s.clusterCidr = "10.42.0.0/16";  # MUST match on all nodes
+#     k3s.serviceCidr = "10.43.0.0/16";  # MUST match on all nodes
+#     k3s.nodeIp = "10.0.0.10";          # advertise correct NIC
+#
+#     network.mode = "loadbalancer";      # MetalLB instead of hostNetwork
+#     network.edgeInterface = "eno3";     # NIC for L2 advertisements
+#   };
+#
+# ── Node 2: Control plane join (additional server) ─────────────────────────
+#
+#   services.open-platform = {
+#     enable = true;
+#     domain = "espocorp.com";
+#     role = "server";                    # joins existing cluster
+#     serverAddr = "https://10.0.0.10:6443";
+#     tokenFile = /etc/k3s/token;         # copied from node 1
+#
+#     k3s.clusterCidr = "10.42.0.0/16";  # MUST match node 1
+#     k3s.serviceCidr = "10.43.0.0/16";  # MUST match node 1
+#     k3s.nodeIp = "10.0.0.11";
+#
+#     network.mode = "loadbalancer";
+#     network.edgeInterface = "eno3";
+#   };
+#
+# ── Node 3: GPU worker (agent only) ───────────────────────────────────────
+#
+#   services.open-platform = {
+#     enable = true;
+#     domain = "espocorp.com";
+#     role = "agent";                     # worker only, no etcd
+#     serverAddr = "https://10.0.0.10:6443";
+#     tokenFile = /etc/k3s/token;
+#
+#     k3s.nodeIp = "10.0.0.12";
+#   };
+#
+# ── Cluster token ──────────────────────────────────────────────────────────
+#
+# After nix01 boots, copy the token to joining nodes:
+#   ssh admin@10.0.0.10 sudo cat /var/lib/rancher/k3s/server/token > /tmp/k3s-token
+#   scp /tmp/k3s-token admin@10.0.0.11:/etc/k3s/token
+#   scp /tmp/k3s-token admin@10.0.0.12:/etc/k3s/token
+#
+# ── Deploy ─────────────────────────────────────────────────────────────────
+#
+# Only run on the first server node:
+#   cd /opt/open-platform && make deploy
+#
+# Other nodes join automatically via k3s. Flux handles workload distribution.
+
+domain: espocorp.com
+
+admin:
+  username: opadmin
+  email: admin@espocorp.com
+
+tls:
+  mode: letsencrypt
+  email: admin@espocorp.com

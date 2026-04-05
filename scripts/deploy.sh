@@ -55,6 +55,23 @@ DOMAIN="${PLATFORM_DOMAIN:?PLATFORM_DOMAIN not set}"
 echo "=== Open Platform Deploy (${DOMAIN}) ==="
 echo ""
 
+# ── Pre-flight: detect existing cluster state ────────────────────────────────
+
+NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l | tr -d ' ')
+EXISTING_FLUX=$(kubectl get namespace flux-system --no-headers 2>/dev/null | wc -l | tr -d ' ')
+EXISTING_FORGEJO=$(kubectl get pods -n forgejo -l app.kubernetes.io/name=forgejo --no-headers 2>/dev/null | grep -c Running || echo 0)
+
+if [ "$NODE_COUNT" -gt 1 ]; then
+  echo "Multi-node cluster detected (${NODE_COUNT} nodes)."
+fi
+if [ "$EXISTING_FLUX" -gt 0 ]; then
+  echo "Flux already installed — deploy will update, not clobber."
+fi
+if [ "$EXISTING_FORGEJO" -gt 0 ]; then
+  echo "Forgejo already running — OAuth2 setup will be idempotent."
+fi
+echo ""
+
 # ── Phase 1: Bootstrap everything ────────────────────────────────────────────
 
 echo "Phase 1: helmfile sync..."

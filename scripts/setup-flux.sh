@@ -47,6 +47,18 @@ fi
 
 echo "Creating Flux GitRepository for system/open-platform..."
 
+# Use in-cluster service URL so Flux doesn't depend on external DNS or ingress.
+# Falls back to external URL if Forgejo service isn't reachable internally.
+FORGEJO_INTERNAL="http://forgejo-http.forgejo.svc.cluster.local:3000"
+FORGEJO_EXTERNAL="https://forgejo.${DOMAIN}"
+if kubectl get svc forgejo-http -n forgejo &>/dev/null; then
+  FORGEJO_URL="${FORGEJO_INTERNAL}"
+  echo "  Using internal Forgejo URL: ${FORGEJO_URL}"
+else
+  FORGEJO_URL="${FORGEJO_EXTERNAL}"
+  echo "  Forgejo service not found in-cluster, using external URL: ${FORGEJO_URL}"
+fi
+
 kubectl apply -f - <<EOF
 apiVersion: source.toolkit.fluxcd.io/v1
 kind: GitRepository
@@ -55,7 +67,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://forgejo.${DOMAIN}/system/open-platform.git
+  url: ${FORGEJO_URL}/system/open-platform.git
   ref:
     branch: main
   secretRef:
